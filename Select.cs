@@ -27,7 +27,7 @@ public partial class Select : Node
         column.AddThemeConstantOverride("separation", 14);
         center.AddChild(column);
 
-        var title = new Label { Text = "CROSSY CEBU", HorizontalAlignment = HorizontalAlignment.Center };
+        var title = new Label { Text = "TABOK_TABOK", HorizontalAlignment = HorizontalAlignment.Center };
         title.AddThemeFontSizeOverride("font_size", 60);
         column.AddChild(title);
 
