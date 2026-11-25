@@ -4,7 +4,7 @@
 2. Open Godot -> Import -> select `project.godot`.
 3. Press Build (hammer icon, top right), then Play (F5).
 
-Controls: WASD / Arrow keys to hop. R / Space to restart after dying.
+Controls: WASD / Arrow keys to hop. R / Space to restart after dying.  
 
 ## Gameplay updates
 
@@ -17,3 +17,5 @@ Controls: WASD / Arrow keys to hop. R / Space to restart after dying.
 - Added random street events: "HOY! TABI!", brownouts, Chismis Alert, videoke, Barangay Tanod, Asong Kalye, and Tricycle Special.
 - Chismis uses existing pedestrians who walk together to talk. During its event, the tanod chases only if you cross outside the marked crossing on a four-row road; stray dogs can also chase you, and tricycles may reverse.
 - Added Filipino dialogue, including "Pre, ingat!", "Saan ka pupunta?", "Walang preno!", "Libre sakay!", "Naku po!", and "Tabi-tabi po!".
+- Taho man can now give you TAHO! With each city Taho man might give you something different
+- Added a gender selector and two new characters Boy and Girl 
