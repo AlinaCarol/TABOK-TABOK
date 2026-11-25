@@ -54,7 +54,7 @@ public partial class Eagle : Node3D
         wingR.AddChild(Util.Box(new Vector3(1.7f, 0.07f, 0.8f), brown, new Vector3(0.85f, 0, 0.05f)));
         AddChild(wingR);
 
-        Scale = new Vector3(1.3f, 1.3f, 1.3f);
+        Scale = new Vector3(0.9f, 0.9f, 0.9f);
         Visible = false;
     }
 

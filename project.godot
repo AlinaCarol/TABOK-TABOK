@@ -25,4 +25,5 @@ project/assembly_name="CrossyRoadBase"
 
 [rendering]
 
+renderer/rendering_method="gl_compatibility"
 anti_aliasing/quality/msaa_3d=2

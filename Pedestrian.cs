@@ -20,11 +20,26 @@ public partial class Pedestrian : Node3D
     float x;
     Func<int, Lane> getLane;
 
-    bool hopping, waving;
-    float waitTimer, t, time, phase;
+    bool hopping, waving, gossiping;
+    float waitTimer, t, time, phase, gossipTargetX, gossipTimer;
     Vector3 from, to;
 
     Node3D model, legL, legR, armL, armR;
+    Label3D gossipLabel;
+
+    public bool CanGossip => !hopping && !gossiping && (Row == LowRow || Row == HighRow);
+    public float WorldX => Position.X;
+
+    public void StartGossip(float targetX, string dialogue, float duration)
+    {
+        if (!CanGossip) return;
+        gossipTargetX = targetX;
+        gossipTimer = duration;
+        gossiping = true;
+        waving = false;
+        gossipLabel.Text = dialogue;
+        gossipLabel.Visible = true;
+    }
 
     public void Init(int lowRow, int highRow, int cellX, bool startAtLow, Func<int, Lane> laneLookup)
     {
@@ -69,6 +84,19 @@ public partial class Pedestrian : Node3D
         model.AddChild(Util.Box(new Vector3(0.32f, 0.1f, 0.32f), new Color("#2b1d14"), new Vector3(0, 1.07f, 0)));
         model.AddChild(Util.Box(new Vector3(0.06f, 0.06f, 0.04f), Colors.Black, new Vector3(-0.07f, 0.93f, -0.15f)));
         model.AddChild(Util.Box(new Vector3(0.06f, 0.06f, 0.04f), Colors.Black, new Vector3(0.07f, 0.93f, -0.15f)));
+
+        gossipLabel = new Label3D
+        {
+            FontSize = 24,
+            PixelSize = 0.008f,
+            OutlineSize = 5,
+            OutlineModulate = Colors.Black,
+            Modulate = Colors.White,
+            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            Visible = false,
+            Position = new Vector3(0, 1.75f, 0)
+        };
+        AddChild(gossipLabel);
     }
 
     void FaceDirection() => model.Rotation = new Vector3(0, dir > 0 ? 0 : Mathf.Pi, 0);
@@ -77,6 +105,28 @@ public partial class Pedestrian : Node3D
     {
         float dt = (float)delta;
         time += dt;
+
+        if (gossiping)
+        {
+            gossipTimer -= dt;
+            float dx = gossipTargetX - Position.X;
+            float step = Math.Min(Math.Abs(dx), 1.2f * dt);
+            var p = Position;
+            p.X += Math.Sign(dx) * step;
+            Position = p;
+            x = p.X;
+            model.Rotation = new Vector3(0, dx > 0 ? -Mathf.Pi / 2 : Mathf.Pi / 2, 0);
+
+            if (gossipTimer <= 0f)
+            {
+                gossiping = false;
+                gossipLabel.Visible = false;
+                waitTimer = 2f + (float)Rng.NextDouble() * 3f;
+                FaceDirection();
+            }
+            Animate();
+            return;
+        }
 
         if (hopping)
         {
@@ -161,9 +211,10 @@ public partial class Pedestrian : Node3D
         {
             legL.RotationDegrees = Vector3.Zero;
             legR.RotationDegrees = Vector3.Zero;
-            armL.RotationDegrees = Vector3.Zero;
-            armR.RotationDegrees = waving
-                ? new Vector3(0, 0, 150f + Mathf.Sin(time * 6f + phase) * 18f) // flagging a jeepney
+            armL.RotationDegrees = gossiping ? new Vector3(0, 0, 35f + Mathf.Sin(time * 5f + phase) * 12f) : Vector3.Zero;
+            armR.RotationDegrees = gossiping
+                ? new Vector3(0, 0, -35f + Mathf.Sin(time * 5f + phase) * 12f)
+                : waving ? new Vector3(0, 0, 150f + Mathf.Sin(time * 6f + phase) * 18f) // flagging a jeepney
                 : Vector3.Zero;
         }
     }

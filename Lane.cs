@@ -21,7 +21,7 @@ public partial class Lane : Node3D
 
 	static readonly Random Rng = new();
 
-	class Mover { public Node3D Node; public float HalfLen; public float Speed; public string Kind; }
+	class Mover { public Node3D Node; public float HalfLen; public float Speed, NormalSpeed, ReverseTimer; public string Kind; }
 
 	class PersonRig
 	{
@@ -45,6 +45,8 @@ public partial class Lane : Node3D
 
 	public LaneType Type;
 	public int Row;
+	public int CrosswalkX;
+	public bool HasPedestrianCrossing { get; private set; }
 	public readonly HashSet<int> Blocked = new(); // sidewalk cells with people / signs / bins / huts
 	readonly List<Mover> movers = new();
 	readonly List<PersonRig> people = new();
@@ -72,6 +74,7 @@ public partial class Lane : Node3D
 		};
 		float top = type == LaneType.River ? -0.2f : 0f;
 		AddChild(Util.Box(new Vector3(60, 0.2f, 1), ground, new Vector3(0, top - 0.1f, 0)));
+		if (type == LaneType.Grass) BuildConcreteDetails();
 
 		switch (type)
 		{
@@ -84,6 +87,35 @@ public partial class Lane : Node3D
 			case LaneType.River: BuildCanal(); break;
 			case LaneType.Construction: BuildConstruction(); break;
 		}
+	}
+
+	void BuildConcreteDetails()
+	{
+		Color joint = new("#77736b");
+		for (int x = -MaxX; x <= MaxX; x += 4)
+			AddChild(Util.Box(new Vector3(0.025f, 0.008f, 1f), joint, new Vector3(x, 0.004f, 0)));
+		if (Row % 2 == 0)
+			AddChild(Util.Box(new Vector3(MaxX * 2f, 0.008f, 0.025f), joint, new Vector3(0, 0.004f, 0)));
+	}
+
+	void BuildCrosswalk()
+	{
+		for (float x = CrosswalkX - 1.25f; x <= CrosswalkX + 1.25f; x += 0.5f)
+			AddChild(Util.Box(new Vector3(0.18f, 0.015f, 0.9f), new Color("#e7e3da"), new Vector3(x, 0.012f, 0)));
+	}
+
+	public void MarkPedestrianCrossing()
+	{
+		if (Type != LaneType.Road || HasPedestrianCrossing) return;
+		HasPedestrianCrossing = true;
+		BuildCrosswalk();
+	}
+
+	public void FaceWavingPeopleAwayFromWater(bool waterAhead)
+	{
+		float yaw = waterAhead ? Mathf.Pi : 0f;
+		foreach (var person in people)
+			if (person.Waving) person.Root.Rotation = new Vector3(0, yaw, 0);
 	}
 
 	// =====================================================================
@@ -99,6 +131,7 @@ public partial class Lane : Node3D
 			if (clearRight && x > MaxX) continue; // landmark zone
 			if (KeepFree != null && KeepFree.Contains(x)) continue; // keep the jam gap open
 			bool scenery = Math.Abs(x) > MaxX;
+			if (!scenery && Blocked.Contains(x)) continue;
 			if (!scenery && (safe || Rng.NextDouble() > 0.18)) continue;
 			if (scenery && Rng.NextDouble() > 0.6) continue;
 			if (!scenery) Blocked.Add(x);
@@ -116,12 +149,81 @@ public partial class Lane : Node3D
 				case 4: prop = MakePalm(); break;
 				case 5: prop = MakeSariSari(); break;
 				case 6: prop = MakeFurniture(); break;
-				default: prop = MakeChicharonStall(); break;
+				case 7: prop = MakeChicharonStall(); break;
+				case 8: prop = MakeRoadSign("STOP", new Color("#c62828"), Colors.White); break;
+				default:
+					prop = MakeNoParkingScene();
+					if (x < MaxX) Blocked.Add(x + 1);
+					break;
 			}
 
 			prop.Position = new Vector3(x, 0, 0);
 			AddChild(prop);
 		}
+	}
+
+	static Node3D MakeRoadSign(string text, Color background, Color foreground)
+	{
+		var sign = new Node3D();
+		sign.AddChild(Util.Box(new Vector3(0.08f, 1.3f, 0.08f), new Color("#616161"), new Vector3(0, 0.65f, 0)));
+		sign.AddChild(Util.Box(new Vector3(0.78f, 0.72f, 0.08f), background, new Vector3(0, 1.35f, 0)));
+		sign.AddChild(new Label3D
+		{
+			Text = text,
+			FontSize = 28,
+			PixelSize = 0.006f,
+			OutlineSize = 4,
+			OutlineModulate = Colors.Black,
+			Modulate = foreground,
+			Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+			Position = new Vector3(0, 1.35f, -0.05f)
+		});
+		return sign;
+	}
+
+	static Node3D MakeNoParkingScene()
+	{
+		var scene = new Node3D();
+		var sign = MakeNoParkingSign();
+		sign.Scale = new Vector3(0.78f, 0.78f, 0.78f);
+		sign.Position = new Vector3(-0.45f, 0, 0);
+		scene.AddChild(sign);
+
+		var parkedTricycle = MakeTricycle(1f);
+		parkedTricycle.Position = new Vector3(0.45f, 0, 0.12f);
+		scene.AddChild(parkedTricycle);
+		return scene;
+	}
+
+	static Node3D MakeNoParkingSign()
+	{
+		var sign = new Node3D();
+		sign.AddChild(Util.Box(new Vector3(0.08f, 1.3f, 0.08f), new Color("#616161"), new Vector3(0, 0.65f, 0)));
+
+		sign.AddChild(Util.Box(new Vector3(1.16f, 1.16f, 0.08f), new Color("#181818"), new Vector3(0, 1.4f, 0)));
+		sign.AddChild(Util.Box(new Vector3(1.08f, 1.08f, 0.04f), Colors.White, new Vector3(0, 1.4f, 0.055f)));
+
+		var disc = Util.Cyl(0.42f, 0.42f, 0.06f, Colors.White, new Vector3(0, 1.4f, 0.085f));
+		disc.RotationDegrees = new Vector3(90, 0, 0);
+		sign.AddChild(disc);
+		sign.AddChild(new MeshInstance3D
+		{
+			Mesh = new TorusMesh { InnerRadius = 0.34f, OuterRadius = 0.42f },
+			MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color("#ed1c24") },
+			Position = new Vector3(0, 1.4f, 0.12f),
+			RotationDegrees = new Vector3(90, 0, 0)
+		});
+
+		var ink = new Color("#111111");
+		sign.AddChild(Util.Box(new Vector3(0.09f, 0.42f, 0.04f), ink, new Vector3(-0.08f, 1.4f, 0.16f)));
+		sign.AddChild(Util.Box(new Vector3(0.2f, 0.07f, 0.04f), ink, new Vector3(0, 1.57f, 0.16f)));
+		sign.AddChild(Util.Box(new Vector3(0.08f, 0.16f, 0.04f), ink, new Vector3(0.06f, 1.51f, 0.16f)));
+		sign.AddChild(Util.Box(new Vector3(0.18f, 0.07f, 0.04f), ink, new Vector3(0, 1.44f, 0.16f)));
+
+		var slash = Util.Box(new Vector3(0.05f, 0.82f, 0.02f), new Color("#ed1c24"), new Vector3(0, 1.4f, 0.2f));
+		slash.RotationDegrees = new Vector3(0, 0, -45);
+		sign.AddChild(slash);
+		return sign;
 	}
 
 
@@ -226,7 +328,7 @@ public partial class Lane : Node3D
 			var info = BuildVehicle(PickVehicle(), dir);
 			info.Node.Position = new Vector3(-Span / 2 + offset + i * spacing, 0, 0);
 			AddChild(info.Node);
-			movers.Add(new Mover { Node = info.Node, HalfLen = info.HalfLen, Speed = speed, Kind = info.Kind });
+			movers.Add(new Mover { Node = info.Node, HalfLen = info.HalfLen, Speed = speed, NormalSpeed = speed, Kind = info.Kind });
 		}
 	}
 
@@ -993,11 +1095,15 @@ public partial class Lane : Node3D
 		var b = new Node3D();
 		Color hull = Rng.NextDouble() < 0.5 ? new Color("#c62828") : new Color("#1565c0");
 		b.AddChild(Util.Box(new Vector3(len, 0.25f, 0.6f), hull, new Vector3(0, -0.125f, 0)));
-		b.AddChild(Util.Box(new Vector3(len + 0.06f, 0.06f, 0.66f), Colors.White, new Vector3(0, -0.03f, 0)));
+		b.AddChild(Util.Box(new Vector3(len + 0.06f, 0.06f, 0.66f), hull, new Vector3(0, 0.01f, 0)));
 		foreach (int sz in new[] { -1, 1 })
-			b.AddChild(Util.Box(new Vector3(len * 0.65f, 0.08f, 0.1f), new Color("#a1887f"), new Vector3(0, -0.04f, sz * 0.85f)));
+		{
+			b.AddChild(Util.Box(new Vector3(len * 0.65f, 0.08f, 0.1f), new Color("#a1887f"), new Vector3(0, -0.165f, sz * 0.85f)));
+			foreach (float bx in new[] { -len * 0.2f, len * 0.2f })
+				b.AddChild(Util.Box(new Vector3(0.08f, 0.3f, 0.08f), new Color("#8d6e63"), new Vector3(bx, 0.02f, sz * 0.85f)));
+		}
 		foreach (float bx in new[] { -len * 0.2f, len * 0.2f })
-			b.AddChild(Util.Box(new Vector3(0.05f, 0.05f, 1.7f), new Color("#8d6e63"), new Vector3(bx, 0.0f, 0)));
+			b.AddChild(Util.Box(new Vector3(0.06f, 0.06f, 1.7f), new Color("#8d6e63"), new Vector3(bx, 0.19f, 0)));
 		return b;
 	}
 
@@ -1045,6 +1151,11 @@ public partial class Lane : Node3D
 
 		foreach (var m in movers)
 		{
+			if (m.ReverseTimer > 0f)
+			{
+				m.ReverseTimer -= dt;
+				if (m.ReverseTimer <= 0f) m.Speed = m.NormalSpeed;
+			}
 			var p = m.Node.Position;
 			p.X += m.Speed * dt;
 			if (p.X > Span / 2) p.X -= Span;
@@ -1127,6 +1238,31 @@ public partial class Lane : Node3D
 			if (Math.Abs(m.Node.Position.X - px) < m.HalfLen + 0.3f) return m.Kind;
 		}
 		return null;
+	}
+
+	public bool HasPersonNear(float px, float distance)
+	{
+		foreach (var person in people)
+			if (Math.Abs(person.Root.Position.X - px) <= distance) return true;
+		return false;
+	}
+
+	public string NearbyVehicleKind(float px, float distance)
+	{
+		foreach (var m in movers)
+			if (Math.Abs(m.Node.Position.X - px) <= m.HalfLen + distance) return m.Kind;
+		return null;
+	}
+
+	public bool ReverseTricycle()
+	{
+		var tricycles = movers.FindAll(m => m.Kind == "tricycle" && m.ReverseTimer <= 0f);
+		if (tricycles.Count == 0) return false;
+
+		var tricycle = tricycles[Rng.Next(tricycles.Count)];
+		tricycle.Speed = -tricycle.NormalSpeed * 1.35f;
+		tricycle.ReverseTimer = 3f;
+		return true;
 	}
 
 	/// <summary>

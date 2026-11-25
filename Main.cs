@@ -9,22 +9,37 @@ public partial class Main : Node3D
 {
 	const float EagleWarnTime = 5f; // seconds without progress before the eagle appears
 
+	sealed class EventNpc
+	{
+		public Node3D Node;
+		public Lane Lane;
+		public int[] Cells;
+		public float TimeLeft;
+	}
+
 	static int best;
 
 	readonly Dictionary<int, Lane> lanes = new();
 	readonly Random rng = new();
 	readonly List<Pedestrian> pedestrians = new();
 	readonly List<TahoMan> tahoMen = new();
+	readonly List<EventNpc> eventNpcs = new();
 
 	Player player;
 	Eagle eagle;
 	Camera3D camera;
 	Label scoreLabel, warnLabel, deathTitle, deathScore;
+	Label streetEventLabel;
+	ColorRect blackout;
 	Control deathBox;
 	Vector3 camFocus = new(0, 0, -2);
-	int nextRow = -4, maxRow, riverStreak;
+	int nextRow = -4, maxRow, riverStreak, roadRunLength;
 	float idle;
 	int nextLandmarkRow = 6, landmarkEnd = -1, accidentBackup;
+	float streetEventTimer = 10f, dialogueTimer = 5f, streetMessageTime, blackoutTime, tanodWatchTime;
+	float chaserTime, chaserSpeed, inputDistractTime;
+	Node3D chaser;
+	bool chaserIsDog;
 	readonly List<string> landmarkBag = new();
 	readonly List<(Node3D Node, int Row)> landmarks = new();
 
@@ -123,6 +138,28 @@ public partial class Main : Node3D
 		warnLabel.AddThemeConstantOverride("outline_size", 8);
 		layer.AddChild(warnLabel);
 
+		blackout = new ColorRect
+		{
+			Color = new Color(0, 0, 0, 0),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		blackout.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		layer.AddChild(blackout);
+
+		streetEventLabel = new Label
+		{
+			HorizontalAlignment = HorizontalAlignment.Center,
+			Visible = false
+		};
+		streetEventLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
+		streetEventLabel.OffsetTop = 160;
+		streetEventLabel.OffsetBottom = 220;
+		streetEventLabel.AddThemeFontSizeOverride("font_size", 32);
+		streetEventLabel.AddThemeColorOverride("font_color", new Color("#ffe082"));
+		streetEventLabel.AddThemeColorOverride("font_outline_color", Colors.Black);
+		streetEventLabel.AddThemeConstantOverride("outline_size", 8);
+		layer.AddChild(streetEventLabel);
+
 		// game over box
 		var center = new CenterContainer { Visible = false };
 		center.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -193,7 +230,7 @@ public partial class Main : Node3D
 
 			var type = PickType(row);
 			if (inLandmarkZone) { type = LaneType.Grass; riverStreak = 0; } // sidewalk plaza in front of every landmark: no traffic runs through it
-			bool clear = type == LaneType.Grass && row >= 4 && rng.NextDouble() < 0.15;               // some sidewalks are the taho man's street
+			bool clear = type == LaneType.Grass && row >= 4 && rng.NextDouble() < 0.10;               // some sidewalks are the taho man's street
 
             // roads: normal traffic, a jam, or an accident (jams back up behind accidents)
             var mode = RoadMode.Flow;
@@ -214,8 +251,25 @@ public partial class Main : Node3D
             var lane = new Lane { Mode = mode, KeepFree = jamGaps, AvoidCells = prev?.Blocked, GapHint = hint };
             lane.Init(type, row, clear, inLandmarkZone);
             AddChild(lane);
+            if (type == LaneType.Grass && prev?.Type == LaneType.River)
+            	lane.FaceWavingPeopleAwayFromWater(waterAhead: false);
+            if (type == LaneType.River && prev?.Type == LaneType.Grass)
+            	prev.FaceWavingPeopleAwayFromWater(waterAhead: true);
             lanes[row] = lane;
             nextRow++;
+
+            if (type == LaneType.Road)
+            {
+            	roadRunLength++;
+            }
+            else
+            {
+            	if (roadRunLength == 4)
+            		for (int crossingRow = row - roadRunLength; crossingRow < row; crossingRow++)
+            			if (lanes.TryGetValue(crossingRow, out var crossingLane))
+            				crossingLane.MarkPedestrianCrossing();
+            	roadRunLength = 0;
+            }
 
             if (type == LaneType.Grass && row >= 3) TrySpawnPedestrians(row);
             if (clear) SpawnTaho(row);
@@ -337,6 +391,7 @@ public partial class Main : Node3D
 			if (k.Keycode is Key.Space or Key.Enter) Restart();
 			return;
 		}
+		if (inputDistractTime > 0f) return;
 
 		switch (k.Keycode)
 		{
@@ -361,8 +416,26 @@ public partial class Main : Node3D
         foreach (var taho in tahoMen)                          // the taho man is solid too
             if (taho.Row == newRow && Math.Abs(taho.Position.X - newX) < 1.9f) return;
 
+		if (lane.Type == LaneType.Road)
+		{
+			if (tanodWatchTime > 0f && lane.HasPedestrianCrossing &&
+				Math.Abs(newX - lane.CrosswalkX) > 1.5f)
+			{
+				tanodWatchTime = 0f;
+				SpawnChaser(dog: false);
+				ShowStreetMessage("Barangay Tanod! Hoy, bawal tumawid diyan!", 2.5f);
+			}
+			else if (!lane.IsClear(newX, 0f, 0.35f))
+			{
+				ShowStreetMessage("Walang preno!", 1.8f);
+			}
+		}
+
         float yaw = dr > 0 ? 0 : dr < 0 ? Mathf.Pi : dx < 0 ? Mathf.Pi / 2 : -Mathf.Pi / 2;
         player.StartHop(new Vector3(newX, 0, -newRow), yaw, newRow);
+
+		if (lane.Type == LaneType.Grass && lane.HasPersonNear(newX, 1.6f))
+			ShowStreetMessage("Tabi-tabi po!", 1.6f);
 
         if (newRow > maxRow)
         {
@@ -385,6 +458,8 @@ public partial class Main : Node3D
         if (player.Alive)
         {
             CheckHazards(dt);
+            if (player.Alive) UpdateStreetEvents(dt);
+            if (player.Alive) UpdateChaser(dt);
 
             if (player.Alive) idle += dt;
             if (player.Alive && idle > EagleWarnTime && !eagle.Active)
@@ -393,11 +468,268 @@ public partial class Main : Node3D
 
         if (eagle.Carrying) player.Position = eagle.Position + new Vector3(0, -0.7f, 0);
         warnLabel.Visible = player.Alive && eagle.Swooping;
+        UpdateStreetVisuals(dt);
+        UpdateEventNpcs(dt);
 
         // smooth camera follow
-        var focus = new Vector3(player.Position.X * 0.5f, 0, player.Position.Z - 2f);
-        camFocus = camFocus.Lerp(focus, 1f - Mathf.Exp(-6f * dt));
+        var focus = new Vector3(player.Position.X, 0, player.Position.Z - 2f);
+        camFocus = camFocus.Lerp(focus, 1f - Mathf.Exp(-3.5f * dt));
         PlaceCamera();
+    }
+
+    void UpdateStreetEvents(float dt)
+    {
+        streetEventTimer -= dt;
+        if (streetEventTimer <= 0f)
+        {
+        	TriggerStreetEvent(rng.Next(7));
+        	streetEventTimer = 18f + (float)rng.NextDouble() * 14f;
+        }
+
+        if (tanodWatchTime > 0f) tanodWatchTime -= dt;
+        if (inputDistractTime > 0f) inputDistractTime -= dt;
+
+        dialogueTimer -= dt;
+        if (dialogueTimer <= 0f)
+        {
+        	dialogueTimer = 6f + (float)rng.NextDouble() * 5f;
+        	foreach (int row in new[] { player.Row - 1, player.Row + 1 })
+        	{
+        		if (lanes.TryGetValue(row, out var lane) && lane.Type == LaneType.Road &&
+        			lane.NearbyVehicleKind(player.Position.X, 3f) == "jeepney")
+        		{
+        			ShowStreetMessage("Libre sakay!", 1.8f);
+        			break;
+        		}
+        	}
+        }
+    }
+
+    void TriggerStreetEvent(int eventId)
+    {
+        switch (eventId)
+        {
+        	case 0:
+        		ShowStreetMessage("HOY! TABI!", 2.5f);
+        		SpawnEventNpcs(1, new[] { "HOY! TABI!" }, 4f);
+        		break;
+        	case 1:
+        		ShowStreetMessage("BROWNOUT!", 2.2f);
+        		blackoutTime = 2.2f;
+        		break;
+        	case 2:
+        		if (StartChismis()) ShowStreetMessage("CHISMIS ALERT!", 2.5f);
+        		break;
+        	case 3:
+        		ShowStreetMessage("VIDEOKE NIGHT!", 2.8f);
+        		SpawnEventNpcs(1, new[] { "La-la-la!" }, 5f);
+        		inputDistractTime = 0.35f;
+        		break;
+        	case 4:
+        		ShowStreetMessage("BARANGAY TANOD: Use the marked crossing!", 3f);
+        		tanodWatchTime = 12f;
+        		break;
+        	case 5:
+        		ShowStreetMessage("ASONG KALYE!", 2.5f);
+        		SpawnChaser(dog: true);
+        		break;
+        	default:
+        		bool reversed = false;
+        		foreach (var lane in lanes.Values
+        			.Where(l => l.Type == LaneType.Road)
+        			.OrderBy(l => Math.Abs(l.Row - player.Row)))
+        		{
+        			if (lane.ReverseTricycle()) { reversed = true; break; }
+        		}
+        		ShowStreetMessage(reversed ? "TRICYCLE SPECIAL! Walang preno!" : "TRICYCLE SPECIAL!", 2.5f);
+        		break;
+        }
+    }
+
+    void ShowStreetMessage(string text, float duration)
+    {
+        streetEventLabel.Text = text;
+        streetEventLabel.Visible = true;
+        streetMessageTime = duration;
+    }
+
+    void UpdateStreetVisuals(float dt)
+    {
+        if (streetMessageTime > 0f)
+        {
+        	streetMessageTime -= dt;
+        	streetEventLabel.Visible = streetMessageTime > 0f;
+        }
+
+        if (blackoutTime > 0f)
+        {
+        	blackoutTime -= dt;
+        	float alpha = Mathf.Clamp(blackoutTime / 1.4f, 0f, 0.88f);
+        	blackout.Color = new Color(0, 0, 0, alpha);
+        }
+        else
+        {
+        	blackout.Color = new Color(0, 0, 0, 0);
+        }
+    }
+
+    bool SpawnEventNpcs(int count, string[] dialogue, float lifetime)
+    {
+        foreach (var lane in lanes.Values
+        	.Where(l => l.Type == LaneType.Grass && l.Row >= maxRow && l.Row <= maxRow + 10)
+        	.OrderBy(l => Math.Abs(l.Row - (maxRow + 3))))
+        {
+        	for (int x = -7; x <= 7 - count + 1; x++)
+        	{
+        		bool available = true;
+        		for (int i = 0; i < count; i++)
+        		{
+        			if (lane.Blocked.Contains(x + i) ||
+        				tahoMen.Any(t => t.Row == lane.Row && Math.Abs(t.Position.X - (x + i)) < 1.5f))
+        			{
+        				available = false;
+        				break;
+        			}
+        		}
+        		if (!available) continue;
+
+        		var cells = new int[count];
+        		for (int i = 0; i < count; i++)
+        		{
+        			cells[i] = x + i;
+        			lane.Blocked.Add(cells[i]);
+        			var npc = BuildEventNpc(dialogue[i % dialogue.Length], i == 0
+        				? new Color("#e67e22")
+        				: new Color("#2196f3"));
+        			npc.Position = new Vector3(x + i, 0, -lane.Row);
+        			npc.RotationDegrees = new Vector3(0, i == 0 ? 35 : -35, 0);
+        			AddChild(npc);
+        			eventNpcs.Add(new EventNpc { Node = npc, Lane = lane, Cells = new[] { x + i }, TimeLeft = lifetime });
+        		}
+        		return true;
+        	}
+        }
+        return false;
+    }
+
+	bool StartChismis()
+	{
+		var candidates = pedestrians.Where(p => p.CanGossip && Math.Abs(p.Row - player.Row) <= 8).ToList();
+		Pedestrian first = null, second = null;
+		float closest = 5.5f;
+		foreach (var a in candidates)
+		{
+			foreach (var b in candidates)
+			{
+				if (a == b || a.Row != b.Row) continue;
+				float distance = Math.Abs(a.WorldX - b.WorldX);
+				if (distance < 1.5f || distance >= closest) continue;
+				first = a;
+				second = b;
+				closest = distance;
+			}
+		}
+		if (first == null || second == null) return false;
+
+		float middle = (first.WorldX + second.WorldX) * 0.5f;
+		first.StartGossip(middle - 0.3f, "Saan ka pupunta?", 5.5f);
+		second.StartGossip(middle + 0.3f, "Pre, ingat!", 5.5f);
+		return true;
+	}
+
+    static Node3D BuildEventNpc(string dialogue, Color shirt)
+    {
+        var npc = new Node3D();
+        npc.AddChild(Util.Box(new Vector3(0.42f, 0.48f, 0.28f), shirt, new Vector3(0, 0.62f, 0)));
+        npc.AddChild(Util.Box(new Vector3(0.28f, 0.28f, 0.28f), new Color("#c68642"), new Vector3(0, 1.02f, 0)));
+        npc.AddChild(Util.Box(new Vector3(0.34f, 0.09f, 0.34f), new Color("#2b1d14"), new Vector3(0, 1.2f, 0)));
+        npc.AddChild(Util.Box(new Vector3(0.14f, 0.34f, 0.16f), new Color("#34495e"), new Vector3(-0.11f, 0.19f, 0)));
+        npc.AddChild(Util.Box(new Vector3(0.14f, 0.34f, 0.16f), new Color("#34495e"), new Vector3(0.11f, 0.19f, 0)));
+        npc.AddChild(new Label3D
+        {
+        	Text = dialogue,
+        	FontSize = 24,
+        	PixelSize = 0.008f,
+        	OutlineSize = 5,
+        	OutlineModulate = Colors.Black,
+        	Modulate = Colors.White,
+        	Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+        	Position = new Vector3(0, 1.65f, 0)
+        });
+        return npc;
+    }
+
+    void UpdateEventNpcs(float dt)
+    {
+        for (int i = eventNpcs.Count - 1; i >= 0; i--)
+        {
+        	var npc = eventNpcs[i];
+        	npc.TimeLeft -= dt;
+        	if (npc.TimeLeft > 0f) continue;
+        	if (GodotObject.IsInstanceValid(npc.Node)) npc.Node.QueueFree();
+        	if (GodotObject.IsInstanceValid(npc.Lane))
+        		foreach (int cell in npc.Cells) npc.Lane.Blocked.Remove(cell);
+        	eventNpcs.RemoveAt(i);
+        }
+    }
+
+    void SpawnChaser(bool dog)
+    {
+        if (chaser != null) return;
+        chaserIsDog = dog;
+        chaserSpeed = dog ? 2.7f : 3.4f;
+        chaserTime = dog ? 9f : 8f;
+        chaser = BuildChaser(dog);
+        chaser.Position = player.Position + (dog ? new Vector3(-5f, 0, 1f) : new Vector3(5f, 0, 3f));
+        AddChild(chaser);
+    }
+
+    static Node3D BuildChaser(bool dog)
+    {
+        var actor = new Node3D();
+        if (dog)
+        {
+        	Color fur = new("#9b5b2b");
+        	actor.AddChild(Util.Box(new Vector3(0.65f, 0.38f, 0.34f), fur, new Vector3(0, 0.48f, 0)));
+        	actor.AddChild(Util.Box(new Vector3(0.28f, 0.3f, 0.3f), fur, new Vector3(0.38f, 0.58f, -0.02f)));
+        	actor.AddChild(Util.Box(new Vector3(0.2f, 0.12f, 0.2f), new Color("#d7a26e"), new Vector3(0.57f, 0.48f, -0.08f)));
+        	foreach (float x in new[] { -0.22f, 0.22f })
+        		foreach (float z in new[] { -0.11f, 0.11f })
+        			actor.AddChild(Util.Box(new Vector3(0.12f, 0.28f, 0.12f), fur, new Vector3(x, 0.18f, z)));
+        	actor.AddChild(Util.Box(new Vector3(0.1f, 0.35f, 0.1f), fur, new Vector3(-0.36f, 0.65f, 0.02f)));
+        }
+        else
+        {
+        	actor.AddChild(Util.Box(new Vector3(0.46f, 0.55f, 0.3f), new Color("#315b36"), new Vector3(0, 0.66f, 0)));
+        	actor.AddChild(Util.Box(new Vector3(0.29f, 0.3f, 0.29f), new Color("#c68642"), new Vector3(0, 1.1f, 0)));
+        	actor.AddChild(Util.Box(new Vector3(0.38f, 0.08f, 0.38f), new Color("#1c2b1f"), new Vector3(0, 1.29f, 0)));
+        	actor.AddChild(Util.Box(new Vector3(0.12f, 0.38f, 0.12f), new Color("#315b36"), new Vector3(0.29f, 0.68f, 0)));
+        	actor.AddChild(Util.Box(new Vector3(0.08f, 0.24f, 0.08f), new Color("#8d6e63"), new Vector3(0.36f, 0.46f, -0.12f)));
+        	actor.AddChild(Util.Box(new Vector3(0.12f, 0.38f, 0.14f), new Color("#263238"), new Vector3(-0.12f, 0.2f, 0)));
+        	actor.AddChild(Util.Box(new Vector3(0.12f, 0.38f, 0.14f), new Color("#263238"), new Vector3(0.12f, 0.2f, 0)));
+        }
+        return actor;
+    }
+
+    void UpdateChaser(float dt)
+    {
+        if (chaser == null) return;
+        chaserTime -= dt;
+        var direction = player.Position - chaser.Position;
+        direction.Y = 0;
+        float distance = direction.Length();
+        if (distance < 0.8f)
+        {
+        	Die(chaserIsDog ? "The stray dog caught you!" : "The Barangay Tanod caught you!", squash: true);
+        	return;
+        }
+        if (chaserTime <= 0f)
+        {
+        	chaser.QueueFree();
+        	chaser = null;
+        	return;
+        }
+        chaser.Position += direction / distance * chaserSpeed * dt;
     }
 
     void CheckHazards(float dt)
@@ -434,7 +766,7 @@ public partial class Main : Node3D
         if (!byEagle) eagle.Stop();
         if (squash) player.Scale = new Vector3(1.3f, 0.08f, 1.3f);
 
-        deathTitle.Text = title;
+        deathTitle.Text = $"{title}\nNaku po!";
         deathScore.Text = $"{City.Current.Name}\nScore: {maxRow}    Best: {best}";
         deathBox.Visible = true;
     }
