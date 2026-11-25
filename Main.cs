@@ -29,6 +29,10 @@ public partial class Main : Node3D
 	Eagle eagle;
 	Camera3D camera;
 	Label scoreLabel, warnLabel, deathTitle, deathScore;
+	Label snackLabel, talkPrompt, toastLabel;
+	TahoMan talkTarget;
+	Tween toastTween;
+	int snacks;
 	Label streetEventLabel;
 	ColorRect blackout;
 	Control deathBox;
@@ -93,6 +97,35 @@ public partial class Main : Node3D
 		scoreLabel = new Label { Position = new Vector2(20, 12) };
 		scoreLabel.AddThemeFontSizeOverride("font_size", 32);
 		layer.AddChild(scoreLabel);
+
+		// snack counter, "press E" prompt and pop-up messages
+		snackLabel = new Label();
+		snackLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomLeft);
+		snackLabel.OffsetLeft = 20;
+		snackLabel.OffsetTop = -56;
+		snackLabel.OffsetRight = 360;
+		snackLabel.OffsetBottom = -16;
+		snackLabel.AddThemeFontSizeOverride("font_size", 26);
+		layer.AddChild(snackLabel);
+
+		talkPrompt = new Label { Visible = false, HorizontalAlignment = HorizontalAlignment.Center };
+		talkPrompt.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomWide);
+		talkPrompt.OffsetTop = -110;
+		talkPrompt.OffsetBottom = -70;
+		talkPrompt.AddThemeFontSizeOverride("font_size", 30);
+		talkPrompt.AddThemeColorOverride("font_color", new Color("#fff176"));
+		talkPrompt.AddThemeColorOverride("font_outline_color", Colors.Black);
+		talkPrompt.AddThemeConstantOverride("outline_size", 8);
+		layer.AddChild(talkPrompt);
+
+		toastLabel = new Label { HorizontalAlignment = HorizontalAlignment.Center, Modulate = new Color(1, 1, 1, 0) };
+		toastLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomWide);
+		toastLabel.OffsetTop = -190;
+		toastLabel.OffsetBottom = -140;
+		toastLabel.AddThemeFontSizeOverride("font_size", 34);
+		toastLabel.AddThemeColorOverride("font_outline_color", Colors.Black);
+		toastLabel.AddThemeConstantOverride("outline_size", 8);
+		layer.AddChild(toastLabel);
 
 		// which place are we in?
 		var cityLabel = new Label { Text = City.Current.Name, HorizontalAlignment = HorizontalAlignment.Right };
@@ -201,13 +234,17 @@ public partial class Main : Node3D
 		button.Pressed += Restart;
 		box.AddChild(button);
 
-		var hint = new Label { Text = "or press R / Space", HorizontalAlignment = HorizontalAlignment.Center };
+		var hint = new Label { Text = "or press R / Space   -   C to change character", HorizontalAlignment = HorizontalAlignment.Center };
 		hint.AddThemeFontSizeOverride("font_size", 18);
 		hint.Modulate = new Color(1, 1, 1, 0.6f);
 		box.AddChild(hint);
 	}
 
-	void UpdateHud() => scoreLabel.Text = $"Score: {maxRow}    Best: {best}";
+	void UpdateHud()
+	{
+		scoreLabel.Text = $"Score: {maxRow}    Best: {best}";
+		snackLabel.Text = $"{City.Current.ItemName}: {snacks}";
+	}
 
 	void Restart() => GetTree().ReloadCurrentScene(); // no limit on restarts
 
@@ -340,6 +377,7 @@ public partial class Main : Node3D
 				var ped = new Pedestrian();
 				AddChild(ped);
 				ped.Init(low, highRow, cx, rng.Next(2) == 0, r => lanes.TryGetValue(r, out var ln) ? ln : null);
+				ped.GetPlayer = () => player;
 				pedestrians.Add(ped);
 				break;
 			}
@@ -385,6 +423,7 @@ public partial class Main : Node3D
 		if (e is not InputEventKey { Pressed: true, Echo: false } k) return;
 
 		if (k.Keycode == Key.R) { Restart(); return; } // restart any time
+		if (k.Keycode == Key.C) { GetTree().ChangeSceneToFile("res://Select.tscn"); return; } // back to character select
 
 		if (!player.Alive)
 		{
@@ -399,6 +438,7 @@ public partial class Main : Node3D
 			case Key.S: case Key.Down:  TryMove(0, -1); break;
 			case Key.A: case Key.Left:  TryMove(-1, 0); break;
 			case Key.D: case Key.Right: TryMove(1, 0); break;
+			case Key.E: TryTalk(); break;
 		}
 	}
 
@@ -415,6 +455,8 @@ public partial class Main : Node3D
         if (lane.Blocked.Contains(newX)) return;               // person / sign / bin / hut
         foreach (var taho in tahoMen)                          // the taho man is solid too
             if (taho.Row == newRow && Math.Abs(taho.Position.X - newX) < 1.9f) return;
+        foreach (var walker in pedestrians)                    // pedestrians are solid too
+            if (walker.BlocksCell(newRow, newX)) return;
 
 		if (lane.Type == LaneType.Road)
 		{
@@ -468,6 +510,7 @@ public partial class Main : Node3D
 
         if (eagle.Carrying) player.Position = eagle.Position + new Vector3(0, -0.7f, 0);
         warnLabel.Visible = player.Alive && eagle.Swooping;
+        UpdateTalkTarget();
         UpdateStreetVisuals(dt);
         UpdateEventNpcs(dt);
 
@@ -769,6 +812,52 @@ public partial class Main : Node3D
         deathTitle.Text = $"{title}\nNaku po!";
         deathScore.Text = $"{City.Current.Name}\nScore: {maxRow}    Best: {best}";
         deathBox.Visible = true;
+    }
+
+    // ---------- talking to the vendor ----------
+
+    void UpdateTalkTarget()
+    {
+        talkTarget = null;
+        if (player.Alive)
+        {
+            float closest = TahoMan.TalkRange;
+            foreach (var vendor in tahoMen)
+            {
+                float d = vendor.DistanceTo(player);
+                if (d < closest) { closest = d; talkTarget = vendor; }
+            }
+        }
+        talkPrompt.Visible = talkTarget != null;
+        if (talkTarget != null) talkPrompt.Text = $"Press E to talk to the {City.Current.VendorTitle}";
+    }
+
+    void TryTalk()
+    {
+        if (talkTarget == null) return;
+
+        if (talkTarget.Talk())
+        {
+            snacks++;
+            idle = 0;                                   // a snack break resets the eagle timer
+            player.HoldItem(City.Current.Vendor);
+            UpdateHud();
+            ShowToast(City.Current.GiftText);
+        }
+        else
+        {
+			ShowToast("He's sold out!");
+        }
+    }
+
+    void ShowToast(string text)
+    {
+        toastLabel.Text = text;
+        toastLabel.Modulate = Colors.White;
+        toastTween?.Kill();
+        toastTween = CreateTween();
+        toastTween.TweenInterval(1.6);
+		toastTween.TweenProperty(toastLabel, "modulate:a", 0f, 0.6f);
     }
 
     void PlaceCamera()

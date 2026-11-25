@@ -21,6 +21,13 @@ public class City
     public float[] PropWeights = { 45, 15, 25, 15, 0, 0, 0, 0, 4, 3 }; // person, jeep stop, bin, kubo, palm, sari-sari, furniture, chicharon, traffic sign, no-parking scene
     public string[] Landmarks = Array.Empty<string>();
 
+    public string Vendor = "taho";                                   // what the street vendor sells: taho, chicharon or buko
+    public string ItemName => Vendor == "chicharon" ? "Chicharon" : Vendor == "buko" ? "Buko juice" : "Taho";
+    public string VendorTitle => Vendor == "chicharon" ? "chicharon vendor" : Vendor == "buko" ? "buko vendor" : "taho man";
+    public string GiftText => Vendor == "chicharon" ? "You got some crunchy chicharon!"
+                            : Vendor == "buko" ? "You got a cold buko juice!"
+                            : "You got a cup of taho!";
+
     public static City Current;
     static City last;
 
@@ -46,7 +53,7 @@ public class City
         },
         new City
         {
-            Name = "Lapu-Lapu City", Tagline = "Home of the Mactan Shrine",
+            Name = "Lapu-Lapu City", Tagline = "Home of the Mactan Shrine", Vendor = "buko",
             Sky = new Color("#8fd3f4"), SidewalkA = new Color("#9c9b97"), SidewalkB = new Color("#8c8b87"),
             Road = new Color("#55555c"), Water = new Color("#2bb7c9"), CleanWater = true,
             WGrass = 0.34f, WRoad = 0.38f, WConstruction = 0.08f, WRiver = 0.20f,
@@ -57,7 +64,7 @@ public class City
         },
         new City
         {
-            Name = "Carcar City", Tagline = "Heritage town and chicharon capital",
+            Name = "Carcar City", Tagline = "Heritage town and chicharon capital", Vendor = "chicharon",
             Sky = new Color("#bfe0f0"), SidewalkA = new Color("#9d9990"), SidewalkB = new Color("#8d8980"),
             Road = new Color("#5a5a5f"), Water = new Color("#5aa9b8"), CleanWater = true,
             WGrass = 0.38f, WRoad = 0.40f, WConstruction = 0.08f, WRiver = 0.14f,
@@ -68,7 +75,7 @@ public class City
         },
         new City
         {
-            Name = "Oslob", Tagline = "Swim with the whale sharks",
+            Name = "Oslob", Tagline = "Swim with the whale sharks", Vendor = "buko",
             Sky = new Color("#7fd0f5"), SidewalkA = new Color("#9c9993"), SidewalkB = new Color("#8c8984"),
             Road = new Color("#58585e"), Water = new Color("#1fb5d0"), CleanWater = true,
             WGrass = 0.40f, WRoad = 0.32f, WConstruction = 0.06f, WRiver = 0.22f,
@@ -79,7 +86,7 @@ public class City
         },
         new City
         {
-            Name = "Moalboal", Tagline = "Sardine run and island dives",
+            Name = "Moalboal", Tagline = "Sardine run and island dives", Vendor = "buko",
             Sky = new Color("#86d6f2"), SidewalkA = new Color("#9b9993"), SidewalkB = new Color("#8c8984"),
             Road = new Color("#5c5c62"), Water = new Color("#17b6c8"), CleanWater = true,
             WGrass = 0.42f, WRoad = 0.28f, WConstruction = 0.06f, WRiver = 0.24f,
@@ -90,7 +97,7 @@ public class City
         },
         new City
         {
-            Name = "Badian", Tagline = "Chase Kawasan Falls",
+            Name = "Badian", Tagline = "Chase Kawasan Falls", Vendor = "buko",
             Sky = new Color("#8ed8e8"), SidewalkA = new Color("#9c9991"), SidewalkB = new Color("#8c8981"),
             Road = new Color("#5a5a60"), Water = new Color("#26c6da"), CleanWater = true,
             WGrass = 0.42f, WRoad = 0.28f, WConstruction = 0.08f, WRiver = 0.22f,

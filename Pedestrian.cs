@@ -30,6 +30,22 @@ public partial class Pedestrian : Node3D
     public bool CanGossip => !hopping && !gossiping && (Row == LowRow || Row == HighRow);
     public float WorldX => Position.X;
 
+    public Func<Player> GetPlayer;                       // so pedestrians never walk into the player
+    public int OccupiedRow => Mathf.RoundToInt(-Position.Z);
+    public int TargetRow => hopping ? Row + dir : Row;
+
+    /// <summary>True if this pedestrian is standing in (or hopping into) that tile.</summary>
+    public bool BlocksCell(int row, int cellX) =>
+        Math.Abs(Position.X - cellX) < 0.95f && (OccupiedRow == row || TargetRow == row);
+
+    bool PlayerOnCell(int row)
+    {
+        var pl = GetPlayer?.Invoke();
+        return pl != null
+            && (pl.Row == row || Mathf.RoundToInt(-pl.Position.Z) == row)
+            && Math.Abs(pl.Position.X - x) < 0.95f;
+    }
+
     public void StartGossip(float targetX, string dialogue, float duration)
     {
         if (!CanGossip) return;
@@ -146,7 +162,7 @@ public partial class Pedestrian : Node3D
                 }
                 else
                 {
-                    StartHop(); // keep going, no stopping in the middle of the road
+                    if (PlayerOnCell(Row + dir)) waitTimer = 0.25f; else StartHop(); // keep going, unless the player is in the way
                 }
             }
             else
@@ -184,6 +200,9 @@ public partial class Pedestrian : Node3D
         int destRow = dir > 0 ? HighRow : LowRow;
         var destLane = getLane(destRow);
         if (destLane == null) return false;
+
+        for (int j = 1; j <= Math.Abs(destRow - Row); j++)
+            if (PlayerOnCell(Row + dir * j)) return false;   // the player is standing in the way
 
         int hops = Math.Abs(destRow - Row);
         for (int j = 1; j < hops; j++)

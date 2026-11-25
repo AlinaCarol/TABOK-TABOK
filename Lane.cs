@@ -973,14 +973,9 @@ public partial class Lane : Node3D
 			double q = Rng.NextDouble();
 			Node3D raft;
 			float len;
-			if (clean)
-			{
-				if (q < 0.5) { len = 3.2f; raft = MakeBangka(len); }                          // outrigger boat
-				else { len = 2.4f + Rf() * 0.8f; raft = MakeBambooRaft(len); }                // bamboo raft
-			}
-			else if (q < 0.6) { len = 2f + Rf() * 1.5f; raft = MakeTrashRaft(len); }          // clump of floating garbage
-			else if (q < 0.8) { len = 1.8f; raft = MakeScavengerRaft(len); }                   // blue raft with a trash collector
-			else { len = 3.2f; raft = MakeBangka(len); }                                       // outrigger boat
+			if (clean) { len = 2.4f + Rf() * 0.8f; raft = MakeBambooRaft(len); }          // bamboo raft
+			else if (q < 0.75) { len = 2f + Rf() * 1.5f; raft = MakeTrashRaft(len); }     // clump of floating garbage
+			else { len = 1.8f; raft = MakeScavengerRaft(len); }                            // blue raft with a trash collector
 
 			raft.Position = new Vector3(-Span / 2 + offset + i * spacing, 0, 0);
 			AddChild(raft);
@@ -1087,24 +1082,6 @@ public partial class Lane : Node3D
 		scavenger.RotationDegrees = new Vector3(-35, Rng.Next(2) * 180, 0); // bending over
 		raft.AddChild(scavenger);
 		return raft;
-	}
-
-	/// <summary>Wooden outrigger boat (bangka).</summary>
-	static Node3D MakeBangka(float len)
-	{
-		var b = new Node3D();
-		Color hull = Rng.NextDouble() < 0.5 ? new Color("#c62828") : new Color("#1565c0");
-		b.AddChild(Util.Box(new Vector3(len, 0.25f, 0.6f), hull, new Vector3(0, -0.125f, 0)));
-		b.AddChild(Util.Box(new Vector3(len + 0.06f, 0.06f, 0.66f), hull, new Vector3(0, 0.01f, 0)));
-		foreach (int sz in new[] { -1, 1 })
-		{
-			b.AddChild(Util.Box(new Vector3(len * 0.65f, 0.08f, 0.1f), new Color("#a1887f"), new Vector3(0, -0.165f, sz * 0.85f)));
-			foreach (float bx in new[] { -len * 0.2f, len * 0.2f })
-				b.AddChild(Util.Box(new Vector3(0.08f, 0.3f, 0.08f), new Color("#8d6e63"), new Vector3(bx, 0.02f, sz * 0.85f)));
-		}
-		foreach (float bx in new[] { -len * 0.2f, len * 0.2f })
-			b.AddChild(Util.Box(new Vector3(0.06f, 0.06f, 1.7f), new Color("#8d6e63"), new Vector3(bx, 0.19f, 0)));
-		return b;
 	}
 
 	/// <summary>A rideable clump of plastic bags, sacks, styrofoam, bottles and tires.</summary>
