@@ -18,4 +18,6 @@ Controls: WASD / Arrow keys to hop. R / Space to restart after dying.
 - Chismis uses existing pedestrians who walk together to talk. During its event, the tanod chases only if you cross outside the marked crossing on a four-row road; stray dogs can also chase you, and tricycles may reverse.
 - Added Filipino dialogue, including "Pre, ingat!", "Saan ka pupunta?", "Walang preno!", "Libre sakay!", "Naku po!", and "Tabi-tabi po!".
 - Taho man can now give you TAHO! With each city Taho man might give you something different
-- Added a gender selector and two new characters Boy and Girl 
+- Added a gender selector and two new characters Boy and Girl
+- Attempting score board
+- fixed the landmarks
