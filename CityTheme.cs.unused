@@ -1,0 +1,197 @@
+using Godot;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+using Landmarks_ = CrossyRoadBase.Landmarks;
+
+namespace CrossyRoadBase;
+
+/// <summary>
+/// One Cebu city or municipality. A new one is picked at random every run: it changes the colors,
+/// the traffic mix, the sidewalk props, the canal and the landmarks you pass.
+/// </summary>
+public class CityTheme
+{
+    public string Name, Kind, Tagline;              // Kind is "City" or "Municipality"
+    public Color Sky, Sun, SidewalkA, SidewalkB, Road, Water;
+    public float Ambient = 0.55f;
+
+    // vehicle mix (relative weights)
+    public float Jeepney, Car, Taxi, Motor, Trike, Truck;
+    public float TrafficDensity = 1f;                // 1 = normal, lower = more space between vehicles
+
+    // lane mix (relative weights)
+    public float WGrass, WRoad, WConstruction, WRiver;
+
+    // canal
+    public float Litter = 1f;                        // 1 = clogged estero, 0 = clean water
+    public bool Shanties = true;                     // canal banks: shanties (true) or nipa cottages and palms (false)
+
+    // sidewalk props (relative weights)
+    public float PPeople = 0.45f, PStop = 0.15f, PBin = 0.25f, PKubo = 0.15f, PPalm = 0f;
+
+    public Func<Node3D>[] Landmarks;
+
+    public string Welcome => Kind == "Municipality" ? $"the Municipality of {Name}" : Name;
+
+    // ------------------------------------------------------------------
+
+    static string lastName;
+    static CityTheme current;
+    public static CityTheme Current => current ??= All[0];
+
+    public static CityTheme Pick(Random rng)
+    {
+        var options = All.Where(t => t.Name != lastName).ToList(); // never the same place twice in a row
+        current = options[rng.Next(options.Count)];
+        lastName = current.Name;
+        return current;
+    }
+
+    static Color C(string hex) => new Color(hex);
+
+    public static readonly List<CityTheme> All = new()
+    {
+        new CityTheme
+        {
+            Name = "Cebu City", Kind = "City", Tagline = "Queen City of the South",
+            Sky = C("#a8dcf0"), Sun = C("#fff6e6"),
+            SidewalkA = C("#c9c6bd"), SidewalkB = C("#b9b6ad"), Road = C("#4a4a52"), Water = C("#6a8794"),
+            Jeepney = 0.22f, Car = 0.22f, Taxi = 0.12f, Motor = 0.22f, Trike = 0.12f, Truck = 0.10f,
+            TrafficDensity = 1f,
+            WGrass = 0.26f, WRoad = 0.46f, WConstruction = 0.10f, WRiver = 0.18f,
+            Litter = 1f, Shanties = true,
+            Landmarks = new Func<Node3D>[]
+            {
+                Landmarks_.Basilica, Landmarks_.Cathedral, Landmarks_.SmCityCebu, Landmarks_.AyalaCenter,
+                Landmarks_.UscCampus, Landmarks_.MagellansCross, Landmarks_.FortSanPedro,
+                () => Landmarks_.Market("CARBON MARKET")
+            }
+        },
+        new CityTheme
+        {
+            Name = "Lapu-Lapu City", Kind = "City", Tagline = "Island of Mactan",
+            Sky = C("#9fd8f2"), Sun = C("#ffe9c4"),
+            SidewalkA = C("#d9cfb0"), SidewalkB = C("#cfc4a2"), Road = C("#4d4d55"), Water = C("#5aa5b5"),
+            Jeepney = 0.12f, Car = 0.14f, Taxi = 0.06f, Motor = 0.28f, Trike = 0.30f, Truck = 0.10f,
+            TrafficDensity = 0.9f,
+            WGrass = 0.30f, WRoad = 0.44f, WConstruction = 0.08f, WRiver = 0.18f,
+            Litter = 0.5f, Shanties = true,
+            PPalm = 0.15f,
+            Landmarks = new Func<Node3D>[]
+            {
+                Landmarks_.MactanShrine,
+                () => Landmarks_.Mall("GAISANO GRAND MALL", C("#fafafa"), C("#1565c0")),
+                () => Landmarks_.HeritageChurch("LAPU-LAPU PARISH CHURCH", C("#e8dcc0"), C("#ffffff"), C("#8d4b2f")),
+                () => Landmarks_.BeachResort("MACTAN BEACH RESORT"),
+                () => Landmarks_.Market("LAPU-LAPU PUBLIC MARKET")
+            }
+        },
+        new CityTheme
+        {
+            Name = "Mandaue City", Kind = "City", Tagline = "Furniture hub of Cebu",
+            Sky = C("#b8c6cf"), Sun = C("#f0f0f0"), Ambient = 0.6f,
+            SidewalkA = C("#b4b4b0"), SidewalkB = C("#a4a4a0"), Road = C("#44444a"), Water = C("#667d6b"),
+            Jeepney = 0.15f, Car = 0.18f, Taxi = 0.05f, Motor = 0.15f, Trike = 0.07f, Truck = 0.40f,
+            TrafficDensity = 1f,
+            WGrass = 0.24f, WRoad = 0.52f, WConstruction = 0.12f, WRiver = 0.12f,
+            Litter = 0.9f, Shanties = true,
+            Landmarks = new Func<Node3D>[]
+            {
+                () => Landmarks_.Factory("MANDAUE FURNITURE"),
+                () => Landmarks_.Mall("PARKMALL", C("#f5f5f5"), C("#e53935")),
+                () => Landmarks_.HeritageChurch("MANDAUE PARISH CHURCH", C("#d7c9a8"), C("#f5ecd7"), C("#7b4a32")),
+                () => Landmarks_.Market("MANDAUE PUBLIC MARKET")
+            }
+        },
+        new CityTheme
+        {
+            Name = "Talisay City", Kind = "City", Tagline = "",
+            Sky = C("#a8dcf0"), Sun = C("#fff6e6"),
+            SidewalkA = C("#cfcabe"), SidewalkB = C("#bfbaae"), Road = C("#4a4a52"), Water = C("#6a8794"),
+            Jeepney = 0.20f, Car = 0.25f, Taxi = 0.05f, Motor = 0.20f, Trike = 0.15f, Truck = 0.15f,
+            TrafficDensity = 0.9f,
+            WGrass = 0.28f, WRoad = 0.46f, WConstruction = 0.10f, WRiver = 0.16f,
+            Litter = 0.7f, Shanties = true,
+            PPalm = 0.08f,
+            Landmarks = new Func<Node3D>[]
+            {
+                () => Landmarks_.HeritageChurch("TALISAY PARISH CHURCH", C("#e6d9b8"), C("#ffffff"), C("#8d4b2f")),
+                () => Landmarks_.Market("TALISAY PUBLIC MARKET"),
+                () => Landmarks_.Mall("TALISAY MALL", C("#fafafa"), C("#2e7d32")),
+                () => Landmarks_.BeachResort("SOUTH COAST BEACH")
+            }
+        },
+        new CityTheme
+        {
+            Name = "Carcar City", Kind = "City", Tagline = "Famous for chicharon",
+            Sky = C("#f0d8b0"), Sun = C("#ffd9a0"),
+            SidewalkA = C("#d7c0a0"), SidewalkB = C("#c9b190"), Road = C("#50484a"), Water = C("#7a8f7a"),
+            Jeepney = 0.15f, Car = 0.12f, Taxi = 0.02f, Motor = 0.25f, Trike = 0.30f, Truck = 0.16f,
+            TrafficDensity = 0.8f,
+            WGrass = 0.32f, WRoad = 0.48f, WConstruction = 0.06f, WRiver = 0.14f,
+            Litter = 0.3f, Shanties = false,
+            PPalm = 0.05f,
+            Landmarks = new Func<Node3D>[]
+            {
+                () => Landmarks_.HeritageChurch("ST. CATHERINE OF ALEXANDRIA PARISH", C("#e3d5b8"), C("#fff8e7"), C("#a0522d")),
+                () => Landmarks_.Market("CARCAR CHICHARON MARKET"),
+                () => Landmarks_.Market("CARCAR PUBLIC MARKET")
+            }
+        },
+        new CityTheme
+        {
+            Name = "Moalboal", Kind = "Municipality", Tagline = "Sardine run & dive beaches",
+            Sky = C("#8fe0f2"), Sun = C("#fffbe8"),
+            SidewalkA = C("#e6d7a8"), SidewalkB = C("#dccb98"), Road = C("#5b5b60"), Water = C("#3fd0d8"),
+            Jeepney = 0.10f, Car = 0.10f, Taxi = 0.02f, Motor = 0.38f, Trike = 0.30f, Truck = 0.10f,
+            TrafficDensity = 0.7f,
+            WGrass = 0.34f, WRoad = 0.40f, WConstruction = 0.06f, WRiver = 0.20f,
+            Litter = 0.05f, Shanties = false,
+            PPalm = 0.30f,
+            Landmarks = new Func<Node3D>[]
+            {
+                () => Landmarks_.BeachResort("MOALBOAL DIVE CENTER"),
+                () => Landmarks_.BeachResort("PANAGSAMA BEACH"),
+                () => Landmarks_.HeritageChurch("MOALBOAL PARISH CHURCH", C("#efe3c8"), C("#ffffff"), C("#b5583a")),
+                () => Landmarks_.Market("MOALBOAL PUBLIC MARKET")
+            }
+        },
+        new CityTheme
+        {
+            Name = "Oslob", Kind = "Municipality", Tagline = "Home of the whale sharks",
+            Sky = C("#9ee3f5"), Sun = C("#fffbe8"),
+            SidewalkA = C("#e2d6ae"), SidewalkB = C("#d8caa0"), Road = C("#5a5a60"), Water = C("#35c3d6"),
+            Jeepney = 0.14f, Car = 0.12f, Taxi = 0.02f, Motor = 0.34f, Trike = 0.28f, Truck = 0.10f,
+            TrafficDensity = 0.7f,
+            WGrass = 0.34f, WRoad = 0.40f, WConstruction = 0.06f, WRiver = 0.20f,
+            Litter = 0.05f, Shanties = false,
+            PPalm = 0.30f,
+            Landmarks = new Func<Node3D>[]
+            {
+                () => Landmarks_.WhaleShark("OSLOB WHALE SHARKS"),
+                () => Landmarks_.HeritageChurch("OSLOB PARISH CHURCH", C("#e8dcc0"), C("#ffffff"), C("#8d4b2f")),
+                () => Landmarks_.Market("OSLOB PUBLIC MARKET"),
+                () => Landmarks_.BeachResort("OSLOB BEACH RESORT")
+            }
+        },
+        new CityTheme
+        {
+            Name = "Argao", Kind = "Municipality", Tagline = "Heritage town",
+            Sky = C("#c9d9e8"), Sun = C("#f4efe6"),
+            SidewalkA = C("#d3cbb9"), SidewalkB = C("#c4bba7"), Road = C("#4e4e54"), Water = C("#4aa3b8"),
+            Jeepney = 0.20f, Car = 0.14f, Taxi = 0.02f, Motor = 0.26f, Trike = 0.26f, Truck = 0.12f,
+            TrafficDensity = 0.75f,
+            WGrass = 0.32f, WRoad = 0.44f, WConstruction = 0.08f, WRiver = 0.16f,
+            Litter = 0.2f, Shanties = false,
+            PPalm = 0.12f,
+            Landmarks = new Func<Node3D>[]
+            {
+                () => Landmarks_.HeritageChurch("ST. MICHAEL THE ARCHANGEL PARISH", C("#bfb59e"), C("#efe8d6"), C("#7b4a32")),
+                () => Landmarks_.Market("ARGAO PUBLIC MARKET"),
+                () => Landmarks_.BeachResort("ARGAO BEACH")
+            }
+        }
+    };
+}

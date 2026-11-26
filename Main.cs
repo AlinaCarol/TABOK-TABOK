@@ -846,7 +846,7 @@ public partial class Main : Node3D
         }
         else
         {
-			ShowToast("He's sold out!");
+            ShowToast("He's sold out!");
         }
     }
 
@@ -857,7 +857,7 @@ public partial class Main : Node3D
         toastTween?.Kill();
         toastTween = CreateTween();
         toastTween.TweenInterval(1.6);
-		toastTween.TweenProperty(toastLabel, "modulate:a", 0f, 0.6f);
+        toastTween.TweenProperty(toastLabel, "modulate:a", 0f, 0.6f);
     }
 
     void PlaceCamera()

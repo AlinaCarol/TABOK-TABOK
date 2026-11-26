@@ -52,10 +52,10 @@ public static class Landmarks
         b.AddChild(Util.Box(new Vector3(5.1f, 0.25f, 3.0f), roof, new Vector3(3.7f, 2.72f, 0)));    // nave roof
 
         // bell tower
-        b.AddChild(Util.Box(new Vector3(1.2f, 4.8f, 1.2f), ochre, new Vector3(0.6f, 2.4f, 2.0f)));
-        b.AddChild(Util.Box(new Vector3(1.3f, 0.15f, 1.3f), trim, new Vector3(0.6f, 3.3f, 2.0f)));
-        b.AddChild(Util.Box(new Vector3(1.26f, 0.6f, 0.5f), dark, new Vector3(0.6f, 4.2f, 2.0f)));  // belfry opening
-        b.AddChild(Rot(Util.Cyl(0f, 0.9f, 1.1f, roof, new Vector3(0.6f, 5.35f, 2.0f), 4), 0, 45, 0));
+        b.AddChild(Util.Box(new Vector3(1.2f, 4.8f, 1.2f), ochre, new Vector3(0.6f, 2.4f, 1.85f)));
+        b.AddChild(Util.Box(new Vector3(1.3f, 0.15f, 1.3f), trim, new Vector3(0.6f, 3.3f, 1.85f)));
+        b.AddChild(Util.Box(new Vector3(1.26f, 0.6f, 0.5f), dark, new Vector3(0.6f, 4.2f, 1.85f)));  // belfry opening
+        b.AddChild(Rot(Util.Cyl(0f, 0.9f, 1.1f, roof, new Vector3(0.6f, 5.35f, 1.85f), 4), 0, 45, 0));
 
         // dome with a cross
         b.AddChild(Util.Cyl(0.3f, 1.15f, 1.0f, new Color("#efe3c8"), new Vector3(3.2f, 3.3f, 0), 16));
@@ -108,7 +108,7 @@ public static class Landmarks
         var b = new Node3D();
 
         b.AddChild(Util.Box(new Vector3(6.5f, 2.8f, 4.6f), wall, new Vector3(3.6f, 1.4f, 0)));
-        b.AddChild(Util.Box(new Vector3(6.55f, 0.6f, 4.65f), blue, new Vector3(3.6f, 2.5f, 0)));
+        b.AddChild(Util.Box(new Vector3(6.55f, 0.5f, 4.65f), blue, new Vector3(3.6f, 2.45f, 0)));
         b.AddChild(Util.Box(new Vector3(0.1f, 1.5f, 3.0f), new Color("#81d4fa"), new Vector3(0.33f, 0.75f, 0)));   // glass entrance
         b.AddChild(Util.Box(new Vector3(0.9f, 0.1f, 3.4f), new Color("#b0bec5"), new Vector3(0.0f, 1.8f, 0)));      // canopy
         b.AddChild(Util.Box(new Vector3(0.3f, 1.0f, 3.2f), blue, new Vector3(0.2f, 3.4f, 0)));                      // sign board
@@ -131,7 +131,7 @@ public static class Landmarks
         b.AddChild(Util.Box(new Vector3(5.2f, 1.9f, 4.6f), new Color("#fafafa"), new Vector3(2.8f, 0.95f, 0)));           // mall
         b.AddChild(Util.Box(new Vector3(5.0f, 0.2f, 4.4f), new Color("#66bb6a"), new Vector3(2.8f, 2.0f, 0)));             // roof garden
         b.AddChild(Util.Box(new Vector3(0.1f, 1.3f, 3.2f), new Color("#80deea"), new Vector3(0.23f, 0.65f, 0)));           // glass entrance
-        b.AddChild(Util.Box(new Vector3(0.3f, 0.6f, 3.4f), blue, new Vector3(0.15f, 1.6f, 0)));                            // blue sign band
+        b.AddChild(Util.Box(new Vector3(0.3f, 0.55f, 3.4f), blue, new Vector3(0.15f, 1.575f, 0)));                            // blue sign band
 
         // glass towers with window stripes
         var tower1 = new Node3D { Position = new Vector3(2.0f, 0, -1.3f) };
@@ -178,7 +178,7 @@ public static class Landmarks
         // gate arch
         foreach (int sz in new[] { -1, 1 })
             b.AddChild(Util.Box(new Vector3(0.35f, 2.0f, 0.35f), green, new Vector3(-0.2f, 1.0f, sz * 1.2f)));
-        b.AddChild(Util.Box(new Vector3(0.35f, 0.5f, 2.9f), gold, new Vector3(-0.2f, 2.1f, 0)));
+        b.AddChild(Util.Box(new Vector3(0.4f, 0.5f, 2.9f), gold, new Vector3(-0.2f, 2.1f, 0)));
 
         b.AddChild(Tree(new Vector3(1.2f, 0, -0.2f)));
         b.AddChild(Tree(new Vector3(5.6f, 0, -1.6f)));
@@ -190,7 +190,32 @@ public static class Landmarks
     // ------------------------------------------------------------------
     //  Registry: the city picks landmarks by name
     // ------------------------------------------------------------------
-    public static Node3D Build(string key) => key switch
+    static int stabilizeCounter;
+
+    /// <summary>Builds a landmark and makes it flicker-proof (see Stabilize).</summary>
+    public static Node3D Build(string key)
+    {
+        var landmark = BuildRaw(key);
+        Stabilize(landmark);
+        return landmark;
+    }
+
+    /// <summary>
+    /// Safety net against z-fighting: each box grows by a tiny, different amount, so two faces that sit on exactly
+    /// the same plane resolve the same way every frame instead of flickering between colors.
+    /// </summary>
+    static void Stabilize(Node node)
+    {
+        if (node is MeshInstance3D mi && mi.Mesh is BoxMesh box)
+        {
+            float eps = 0.002f + (stabilizeCounter++ % 7) * 0.001f;
+            box.Size += new Vector3(eps, eps, eps);
+        }
+        foreach (Node child in node.GetChildren())
+            Stabilize(child);
+    }
+
+    static Node3D BuildRaw(string key) => key switch
     {
         "basilica" => Basilica(),
         "cathedral" => Cathedral(),
